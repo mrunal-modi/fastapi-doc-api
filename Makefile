@@ -6,11 +6,12 @@ endif
 
 # Variables
 PROJECT_ID ?= $(or $(GCP_PROJECT_ID),default-project-id)
-SERVICE_NAME ?= fastapi-doc-api
+SERVICE_NAME ?= byo-unstructured-api
 REGION ?= $(or $(GCP_REGION),us-central1)
 LOCAL_IMAGE_NAME=$(SERVICE_NAME)-local
 CLOUD_IMAGE=gcr.io/$(PROJECT_ID)/$(SERVICE_NAME)
 PORT ?= 8080
+BYO_UNSTRUCTURED_API_KEY ?= default-dev-key
 
 #######################
 # Local Development   #
@@ -22,11 +23,11 @@ local-build:
 
 # Run the container locally
 local-run:
-	docker run -p $(PORT):8080 $(LOCAL_IMAGE_NAME)
+	docker run -p $(PORT):8080 -e BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY) $(LOCAL_IMAGE_NAME)
 
 # Run container in detached mode
 local-run-detached:
-	docker run -d -p $(PORT):8080 $(LOCAL_IMAGE_NAME)
+	docker run -d -p $(PORT):8080 -e BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY) $(LOCAL_IMAGE_NAME)
 
 # Stop the running container
 local-stop:
@@ -40,11 +41,12 @@ local-clean:
 # Rebuild and restart the local container
 local-rebuild: local-clean local-build local-run
 
-# Test by sending a request to the local server
+# Test by sending a request to the local server with API key
 local-test:
 	curl -X 'POST' \
-	  'http://localhost:$(PORT)/extract-text/' \
+	  'http://localhost:$(PORT)/unstructured' \
 	  -H 'accept: application/json' \
+	  -H 'x-api-key: $(BYO_UNSTRUCTURED_API_KEY)' \
 	  -H 'Content-Type: multipart/form-data' \
 	  -F 'file=@test.pdf'
 
@@ -75,17 +77,14 @@ gcp-build:
 gcp-cloud-build:
 	gcloud builds submit --tag $(CLOUD_IMAGE) .
 
-# Push image to Google Container Registry
-gcp-push:
-	docker push $(CLOUD_IMAGE)
-
-# Deploy to Google Cloud Run
+# Deploy to Google Cloud Run with API key
 gcp-deploy:
 	gcloud run deploy $(SERVICE_NAME) \
 	  --image $(CLOUD_IMAGE) \
 	  --platform managed \
 	  --region $(REGION) \
-	  --allow-unauthenticated
+	  --allow-unauthenticated \
+	  --set-env-vars "BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY)"
 
 # Open deployed service URL in browser
 gcp-open:
@@ -108,8 +107,9 @@ gcp-url:
 # Test API after deployment
 gcp-test:
 	curl -X 'POST' \
-	  "$(shell gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format 'value(status.url)')/extract-text/" \
+	  "$(shell gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format 'value(status.url)')/unstructured" \
 	  -H 'accept: application/json' \
+	  -H 'x-api-key: $(BYO_UNSTRUCTURED_API_KEY)' \
 	  -H 'Content-Type: multipart/form-data' \
 	  -F 'file=@test.pdf'
 
@@ -128,7 +128,7 @@ setup-env:
 			cp .env.sample .env; \
 			echo ".env file created from template. Please edit it with your actual values."; \
 		else \
-			echo "# Google Cloud Platform configuration\nGCP_PROJECT_ID=your-project-id\nGCP_REGION=us-central1\nPORT=8080" > .env; \
+			echo "# Google Cloud Platform configuration\nGCP_PROJECT_ID=your-project-id\nGCP_REGION=us-central1\nPORT=8080\nBYO_UNSTRUCTURED_API_KEY=your-secure-api-key" > .env; \
 			echo ".env file created. Please edit it with your actual values."; \
 		fi; \
 	else \
@@ -142,6 +142,7 @@ env-info:
 	@echo "  REGION: $(REGION)"
 	@echo "  SERVICE_NAME: $(SERVICE_NAME)"
 	@echo "  PORT: $(PORT)"
+	@echo "  BYO_UNSTRUCTURED_API_KEY: $(BYO_UNSTRUCTURED_API_KEY)"
 
 # Help command to list available targets
 help:
@@ -166,8 +167,7 @@ help:
 	@echo "  setup-buildx        - Set up Docker BuildX for multi-platform builds"
 	@echo "  gcp-build           - Build and push Docker image for GCP (AMD64 architecture)"
 	@echo "  gcp-cloud-build     - Alternative: Build using Google Cloud Build (if local builds fail)"
-	@echo "  gcp-push            - Push image to Google Container Registry (used separately if needed)"
-	@echo "  gcp-deploy          - Deploy to Google Cloud Run"
+	@echo "  gcp-deploy          - Deploy to Google Cloud Run with API key"
 	@echo "  gcp-open            - Open deployed service in browser"
 	@echo "  gcp-release         - Full pipeline: build, push, deploy"
 	@echo "  gcp-cloud-release   - Alternative pipeline using Cloud Build (more reliable for M1/M2 Macs)"

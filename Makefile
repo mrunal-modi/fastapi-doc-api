@@ -51,6 +51,11 @@ local-test:
 	  -F 'file=@test.pdf'
 
 #######################
+# Setup Docker BuildX for multi-platform builds
+setup-buildx:
+	docker buildx create --name mybuilder --use || true
+	docker buildx inspect --bootstrap
+
 # Google Cloud Run    #
 #######################
 
@@ -64,9 +69,9 @@ gcp-auth:
 gcp-enable-services:
 	gcloud services enable run.googleapis.com containerregistry.googleapis.com
 
-# Build using Google Cloud Build
+# Build Docker image for Google Cloud (with platform specification for AMD64)
 gcp-build:
-	gcloud builds submit --tag $(CLOUD_IMAGE) .
+	docker buildx build --platform linux/amd64 -t $(CLOUD_IMAGE) --push .
 
 # Deploy to Google Cloud Run with API key from .env
 gcp-deploy:
@@ -89,8 +94,8 @@ gcp-deploy:
 gcp-open:
 	gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format 'value(status.url)' | xargs open
 
-# Full pipeline: Build and Deploy to Cloud Run
-gcp-release: gcp-build gcp-deploy gcp-open
+# Full pipeline: Build, Push, Deploy (push is included in build)
+gcp-release: setup-buildx gcp-build gcp-deploy gcp-open
 
 # Clean up Google Cloud Docker images
 gcp-clean:
@@ -164,10 +169,10 @@ help:
 	@echo "Google Cloud Run:"
 	@echo "  gcp-auth            - Authenticate with Google Cloud"
 	@echo "  gcp-enable-services - Enable required GCP services"
-	@echo "  gcp-build           - Build using Google Cloud Build"
+	@echo "  setup-buildx        - Set up Docker BuildX for multi-platform builds"
+	@echo "  gcp-build           - Build and push Docker image for GCP (AMD64 architecture)"
 	@echo "  gcp-deploy          - Deploy to Google Cloud Run with API key from .env"
-	@echo "  gcp-release         - Full pipeline: build and deploy"
-	@echo "  gcp-open            - Open deployed service in browser"
+	@echo "  gcp-release         - Full pipeline: build, push, deploy"
 	@echo "  gcp-clean           - Clean up GCP Docker images"
 	@echo "  gcp-url             - Show deployed service URL"
 	@echo "  gcp-test            - Test GCP deployment with a sample PDF"

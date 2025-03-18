@@ -29,7 +29,7 @@ A simple, efficient API service built with FastAPI for extracting text from PDF 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/pdf-extraction-api.git
+   git clone https://github.com/mrunal-modi/pdf-extraction-api.git
    cd pdf-extraction-api
    ```
 

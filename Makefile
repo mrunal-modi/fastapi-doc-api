@@ -51,11 +51,6 @@ local-test:
 	  -F 'file=@test.pdf'
 
 #######################
-# Setup Docker BuildX for multi-platform builds
-setup-buildx:
-	docker buildx create --name mybuilder --use || true
-	docker buildx inspect --bootstrap
-
 # Google Cloud Run    #
 #######################
 
@@ -69,16 +64,20 @@ gcp-auth:
 gcp-enable-services:
 	gcloud services enable run.googleapis.com containerregistry.googleapis.com
 
-# Build Docker image for Google Cloud (with platform specification for AMD64)
+# Build using Google Cloud Build
 gcp-build:
-	docker buildx build --platform linux/amd64 -t $(CLOUD_IMAGE) --push .
-
-# Alternative: Build using Google Cloud Build (use this if local builds fail)
-gcp-cloud-build:
 	gcloud builds submit --tag $(CLOUD_IMAGE) .
 
-# Deploy to Google Cloud Run with API key
+# Deploy to Google Cloud Run with API key from .env
 gcp-deploy:
+	@if [ "$(BYO_UNSTRUCTURED_API_KEY)" = "default-dev-key" ]; then \
+		echo "⚠️ WARNING: Deploying with default development API key."; \
+		echo "This is not recommended for production."; \
+		echo "Please set a secure BYO_UNSTRUCTURED_API_KEY in your .env file."; \
+		read -p "Continue anyway? (y/N): " confirm && [ $$confirm = "y" ] || exit 1; \
+	else \
+		echo "✅ Deploying with API key from .env file"; \
+	fi
 	gcloud run deploy $(SERVICE_NAME) \
 	  --image $(CLOUD_IMAGE) \
 	  --platform managed \
@@ -90,11 +89,8 @@ gcp-deploy:
 gcp-open:
 	gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format 'value(status.url)' | xargs open
 
-# Full pipeline: Build, Push, Deploy (push is included in build)
-gcp-release: setup-buildx gcp-build gcp-deploy gcp-open
-
-# Alternative full pipeline using Cloud Build
-gcp-cloud-release: gcp-cloud-build gcp-deploy gcp-open
+# Full pipeline: Build and Deploy to Cloud Run
+gcp-release: gcp-build gcp-deploy gcp-open
 
 # Clean up Google Cloud Docker images
 gcp-clean:
@@ -142,7 +138,11 @@ env-info:
 	@echo "  REGION: $(REGION)"
 	@echo "  SERVICE_NAME: $(SERVICE_NAME)"
 	@echo "  PORT: $(PORT)"
-	@echo "  BYO_UNSTRUCTURED_API_KEY: $(BYO_UNSTRUCTURED_API_KEY)"
+	@if [ "$(BYO_UNSTRUCTURED_API_KEY)" = "default-dev-key" ]; then \
+		echo "  BYO_UNSTRUCTURED_API_KEY: default-dev-key (OK for local development only)"; \
+	else \
+		echo "  BYO_UNSTRUCTURED_API_KEY: ******** (secure key set)"; \
+	fi
 
 # Help command to list available targets
 help:
@@ -164,13 +164,10 @@ help:
 	@echo "Google Cloud Run:"
 	@echo "  gcp-auth            - Authenticate with Google Cloud"
 	@echo "  gcp-enable-services - Enable required GCP services"
-	@echo "  setup-buildx        - Set up Docker BuildX for multi-platform builds"
-	@echo "  gcp-build           - Build and push Docker image for GCP (AMD64 architecture)"
-	@echo "  gcp-cloud-build     - Alternative: Build using Google Cloud Build (if local builds fail)"
-	@echo "  gcp-deploy          - Deploy to Google Cloud Run with API key"
+	@echo "  gcp-build           - Build using Google Cloud Build"
+	@echo "  gcp-deploy          - Deploy to Google Cloud Run with API key from .env"
+	@echo "  gcp-release         - Full pipeline: build and deploy"
 	@echo "  gcp-open            - Open deployed service in browser"
-	@echo "  gcp-release         - Full pipeline: build, push, deploy"
-	@echo "  gcp-cloud-release   - Alternative pipeline using Cloud Build (more reliable for M1/M2 Macs)"
 	@echo "  gcp-clean           - Clean up GCP Docker images"
 	@echo "  gcp-url             - Show deployed service URL"
 	@echo "  gcp-test            - Test GCP deployment with a sample PDF"

@@ -5,13 +5,13 @@ export $(shell sed 's/=.*//' .env)
 endif
 
 # Variables
-PROJECT_ID ?= $(or $(GCP_PROJECT_ID),default-project-id)
-SERVICE_NAME ?= byo-unstructured-api
-REGION ?= $(or $(GCP_REGION),us-central1)
-LOCAL_IMAGE_NAME=$(SERVICE_NAME)-local
+PROJECT_ID=$(or $(GCP_PROJECT_ID),default-project-id)
+SERVICE_NAME=byo-unstructured-api
+REGION=$(or $(GCP_REGION),us-central1)
+LOCAL_IMAGE_NAME=$(SERVICE_NAME)
 CLOUD_IMAGE=gcr.io/$(PROJECT_ID)/$(SERVICE_NAME)
-PORT ?= 8080
-BYO_UNSTRUCTURED_API_KEY ?= default-dev-key
+PORT=8080
+BYO_UNSTRUCTURED_API_KEY=default-dev-key
 
 #######################
 # Local Development   #
@@ -21,13 +21,11 @@ BYO_UNSTRUCTURED_API_KEY ?= default-dev-key
 local-build:
 	docker build -t $(LOCAL_IMAGE_NAME) .
 
-# Run the container locally
-local-run:
-	docker run -p $(PORT):8080 -e BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY) $(LOCAL_IMAGE_NAME)
+local-build:
+	docker build -t $(SERVICE_NAME) .
 
-# Run container in detached mode
-local-run-detached:
-	docker run -d -p $(PORT):8080 -e BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY) $(LOCAL_IMAGE_NAME)
+local-run:
+	docker run -p $(PORT):8080 -e BYO_UNSTRUCTURED_API_KEY=$(BYO_UNSTRUCTURED_API_KEY) $(SERVICE_NAME)
 
 # Stop the running container
 local-stop:
